@@ -1,0 +1,26 @@
+# 考试材料与学生隐私数据（含学校/班级/答卷/成绩，禁止入库）
+试卷/
+答案/
+*期中考试/
+data/submissions/
+data/exam/
+data/answer/
+work/
+output/
+
+# Python / 本地环境
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.xlsx
+~$*
