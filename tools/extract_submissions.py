@@ -179,7 +179,13 @@ def collect_entries() -> list[dict]:
     return entries
 
 
-def main() -> None:
+def main(log=None) -> list[dict]:
+    def _log(msg: str) -> None:
+        if log:
+            log(msg)
+        else:
+            print(msg)
+
     out = _out()
     if out.exists():
         shutil.rmtree(out)
@@ -188,8 +194,11 @@ def main() -> None:
     used: set[str] = set()
     manifest = []
     entries = collect_entries()
+    total = len(entries)
+    _log(f"发现答卷 {total} 份，开始提取截图…")
 
-    for e in entries:
+    empty = 0
+    for idx, e in enumerate(entries, 1):
         sid = safe_id(e["name"], e["source"], used)
         dest = out / sid
         dest.mkdir(parents=True)
@@ -226,6 +235,7 @@ def main() -> None:
 
         if not images:
             notes.append("未找到可用截图")
+            empty += 1
 
         meta = {
             "id": sid,
@@ -239,14 +249,16 @@ def main() -> None:
             json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         manifest.append(meta)
-        print(f"[OK] {sid}: {len(images)} images | {e['source']}")
+        # 每 10 份或末尾汇报一次，避免刷屏
+        if idx == total or idx % 10 == 0:
+            _log(f"  提取进度 {idx}/{total}")
 
     wd = paths.work_dir()
     wd.mkdir(parents=True, exist_ok=True)
     man_path = wd / "manifest.json"
     man_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\nTotal students: {len(manifest)}")
-    print(f"Manifest: {man_path}")
+    _log(f"截图提取完成：有效 {total - empty} 份，无图 {empty} 份")
+    return manifest
 
 
 if __name__ == "__main__":

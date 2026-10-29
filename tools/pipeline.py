@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -13,6 +14,15 @@ import paths
 
 
 LogFn = Callable[[str], None]
+
+
+def _fmt_elapsed(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h:d}:{m:02d}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
 
 
 def run_pipeline(
@@ -35,21 +45,35 @@ def run_pipeline(
     grade_exam.set_api_key(api_key)
     grade_exam.MAX_WORKERS = max(1, int(workers))
 
-    _log(f"工作目录: {paths.get_root()}")
-    _log(f"答卷目录: {paths.submissions_dir()}")
-    _log("① 提取截图…")
-    extract_submissions.main()
+    t0 = time.monotonic()
+    _log("— 批改任务 —")
+    _log(f"答卷：{paths.submissions_dir()}")
+    _log(f"输出：{paths.get_root()}")
+    _log("")
+
+    _log("[1/3] 提取截图")
+    t1 = time.monotonic()
+    extract_submissions.main(log=_log)
+    _log(f"  本步耗时 {_fmt_elapsed(time.monotonic() - t1)}")
     metas = list(paths.submissions_out().glob("*/meta.json"))
-    _log(f"   共 {len(metas)} 份答卷")
     if not metas:
         raise RuntimeError("未找到可批改答卷，请检查目录是否包含 Word/图片。")
 
-    _log("② 识图评分（需联网）…")
+    _log("")
+    _log("[2/3] 识图评分（需联网，请稍候）")
+    t2 = time.monotonic()
     grade_exam.main(log=_log)
+    _log(f"  本步耗时 {_fmt_elapsed(time.monotonic() - t2)}")
 
-    _log("③ 导出 Excel…")
+    _log("")
+    _log("[3/3] 导出成绩表")
+    t3 = time.monotonic()
     xlsx = export_excel.main()
-    _log(f"完成：{xlsx}")
+    _log(f"已生成：{xlsx.name}")
+    _log(f"完整路径：{xlsx}")
+    _log(f"  本步耗时 {_fmt_elapsed(time.monotonic() - t3)}")
+    _log("")
+    _log(f"全部完成。流水线总耗时 {_fmt_elapsed(time.monotonic() - t0)}")
     return Path(xlsx)
 
 

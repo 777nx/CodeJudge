@@ -289,6 +289,8 @@ def grade_one(meta_path: Path) -> dict:
 
 
 def main(log: Callable[[str], None] | None = None) -> None:
+    import threading
+
     def _log(msg: str) -> None:
         if log:
             log(msg)
@@ -297,24 +299,36 @@ def main(log: Callable[[str], None] | None = None) -> None:
 
     subs = paths.submissions_out()
     metas = sorted(subs.glob("*/meta.json"))
-    _log(f"开始评分：{len(metas)} 份，并发 {MAX_WORKERS}")
+    total = len(metas)
+    _log(f"开始识图评分：共 {total} 份，并发 {MAX_WORKERS}")
     results = []
     errors = []
+    done = 0
+    lock = threading.Lock()
 
     def job(mp: Path):
-        r = grade_one(mp)
-        _log(f"  {r['id']}: {r.get('total', 0)}  复核={r.get('needs_review')}")
-        return r
+        return grade_one(mp)
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
         futs = {ex.submit(job, m): m for m in metas}
         for fut in as_completed(futs):
+            mp = futs[fut]
             try:
-                results.append(fut.result())
+                r = fut.result()
+                results.append(r)
+                with lock:
+                    done += 1
+                    cur = done
+                flag = "需复核" if r.get("needs_review") else "OK"
+                name = r.get("name") or r.get("id")
+                seat = r.get("seat") or "-"
+                _log(f"  [{cur:>3}/{total}] {seat} {name}  →  {r.get('total', 0):3d} 分  {flag}")
             except Exception as e:
-                mp = futs[fut]
                 errors.append({"meta": str(mp), "error": str(e)})
-                _log(f"  ERROR {mp.parent.name}: {e}")
+                with lock:
+                    done += 1
+                    cur = done
+                _log(f"  [{cur:>3}/{total}] {mp.parent.name}  →  失败：{e}")
 
     results.sort(key=lambda x: (x.get("seat") or "ZZZ", x.get("name") or ""))
     out = paths.grades_json()
@@ -323,7 +337,17 @@ def main(log: Callable[[str], None] | None = None) -> None:
         json.dumps({"results": results, "errors": errors}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    _log(f"已保存 {out} | 成功={len(results)} 失败={len(errors)}")
+    if results:
+        scores = [int(r.get("total", 0) or 0) for r in results]
+        review_n = sum(1 for r in results if r.get("needs_review"))
+        _log(
+            "评分汇总："
+            f"均分 {sum(scores)/len(scores):.1f} · "
+            f"最高 {max(scores)} · 最低 {min(scores)} · "
+            f"需复核 {review_n} · 失败 {len(errors)}"
+        )
+    else:
+        _log(f"评分结束：无有效结果，失败 {len(errors)}")
 
 
 if __name__ == "__main__":

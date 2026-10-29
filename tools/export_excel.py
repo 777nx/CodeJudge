@@ -130,7 +130,6 @@ def main() -> Path:
     ws2.append(["零分人数", sum(1 for t in totals if t == 0)])
 
     wb.save(out)
-    print(f"Wrote {out}")
     return out
 
 
