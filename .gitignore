@@ -24,3 +24,9 @@ Thumbs.db
 .vscode/
 *.xlsx
 ~$*
+
+# 打包产物与本地密钥
+build/
+dist/
+*.spec
+codejudge_config.json

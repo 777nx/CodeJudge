@@ -8,11 +8,24 @@ import shutil
 import zipfile
 from pathlib import Path
 
-from paths import ROOT, SUBMISSIONS_OUT, submissions_dir
+import paths
 
-SRC = submissions_dir()
-OUT = SUBMISSIONS_OUT
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+
+
+def _src() -> Path:
+    return paths.submissions_dir()
+
+
+def _out() -> Path:
+    return paths.submissions_out()
+
+
+def _rel_source(p: Path) -> str:
+    try:
+        return str(p.resolve().relative_to(paths.get_root()))
+    except ValueError:
+        return str(p.resolve())
 
 
 def basename_no_doc_ext(raw: str) -> str:
@@ -132,7 +145,10 @@ def extract_doc_via_word(doc: Path, dest: Path) -> list[str]:
 
 def collect_entries() -> list[dict]:
     entries: list[dict] = []
-    for p in sorted(SRC.iterdir(), key=lambda x: x.name.lower()):
+    src = _src()
+    if not src.exists():
+        raise FileNotFoundError(f"答卷目录不存在: {src}")
+    for p in sorted(src.iterdir(), key=lambda x: x.name.lower()):
         if p.name.startswith("."):
             continue
         if p.is_file() and p.suffix.lower() in {".docx", ".doc"}:
@@ -140,7 +156,7 @@ def collect_entries() -> list[dict]:
                 {
                     "name": parse_name(p.name),
                     "seat": parse_seat(p.name),
-                    "source": str(p.relative_to(ROOT)),
+                    "source": _rel_source(p),
                     "kind": "file",
                     "path": p,
                 }
@@ -153,7 +169,7 @@ def collect_entries() -> list[dict]:
                 {
                     "name": parse_name(p.name),
                     "seat": parse_seat(p.name),
-                    "source": str(p.relative_to(ROOT)),
+                    "source": _rel_source(p),
                     "kind": "dir",
                     "path": p,
                     "docs": docs,
@@ -164,9 +180,10 @@ def collect_entries() -> list[dict]:
 
 
 def main() -> None:
-    if OUT.exists():
-        shutil.rmtree(OUT)
-    OUT.mkdir(parents=True)
+    out = _out()
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
 
     used: set[str] = set()
     manifest = []
@@ -174,7 +191,7 @@ def main() -> None:
 
     for e in entries:
         sid = safe_id(e["name"], e["source"], used)
-        dest = OUT / sid
+        dest = out / sid
         dest.mkdir(parents=True)
         images: list[str] = []
         notes: list[str] = []
@@ -188,24 +205,22 @@ def main() -> None:
                 if not images:
                     notes.append("旧版.doc提取失败或无图，需人工复核")
         else:
-            # 目录：先拷贝裸图，再抽 doc/docx
             for i, img in enumerate(sorted(e.get("imgs", [])), 1):
                 ext = img.suffix.lower()
-                out = dest / f"raw_{i:02d}{ext}"
-                shutil.copy2(img, out)
-                images.append(out.name)
+                img_out = dest / f"raw_{i:02d}{ext}"
+                shutil.copy2(img, img_out)
+                images.append(img_out.name)
             for doc in sorted(e.get("docs", [])):
                 if doc.suffix.lower() == ".docx":
                     more = extract_docx_images(doc, dest)
                 else:
                     more = extract_doc_via_word(doc, dest)
-                # 避免重名
                 renumbered = []
                 base = len(images)
                 for j, name in enumerate(more, 1):
-                    src = dest / name
+                    src_f = dest / name
                     new_name = f"doc_{base + j:02d}{Path(name).suffix.lower()}"
-                    src.rename(dest / new_name)
+                    src_f.rename(dest / new_name)
                     renumbered.append(new_name)
                 images.extend(renumbered)
 
@@ -226,10 +241,9 @@ def main() -> None:
         manifest.append(meta)
         print(f"[OK] {sid}: {len(images)} images | {e['source']}")
 
-    from paths import WORK_DIR
-
-    man_path = WORK_DIR / "manifest.json"
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
+    wd = paths.work_dir()
+    wd.mkdir(parents=True, exist_ok=True)
+    man_path = wd / "manifest.json"
     man_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\nTotal students: {len(manifest)}")
     print(f"Manifest: {man_path}")

@@ -9,16 +9,15 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
-from paths import GRADES_JSON, GRADES_XLSX
-
-GRADES = GRADES_JSON
-OUT = GRADES_XLSX
+import paths
 
 
-def main() -> None:
-    data = json.loads(GRADES.read_text(encoding="utf-8"))
+def main() -> Path:
+    grades = paths.grades_json()
+    out = paths.grades_xlsx()
+    data = json.loads(grades.read_text(encoding="utf-8"))
     results = data.get("results", [])
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    out.parent.mkdir(parents=True, exist_ok=True)
 
     wb = Workbook()
     ws = wb.active
@@ -130,8 +129,9 @@ def main() -> None:
     ws2.append(["优秀人数(>=90)", sum(1 for t in totals if t >= 90)])
     ws2.append(["零分人数", sum(1 for t in totals if t == 0)])
 
-    wb.save(OUT)
-    print(f"Wrote {OUT}")
+    wb.save(out)
+    print(f"Wrote {out}")
+    return out
 
 
 if __name__ == "__main__":

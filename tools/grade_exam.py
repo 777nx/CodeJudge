@@ -3,39 +3,21 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable
 from pathlib import Path
 
-from paths import GRADES_JSON, SUBMISSIONS_OUT, WORK_DIR
+import paths
+from vision_client import call_vision as vision_call
 
-ROOT = Path(__file__).resolve().parents[1]
-WORK = WORK_DIR
-SUBS = SUBMISSIONS_OUT
-
-
-def _resolve_vision_js() -> Path:
-    env = os.environ.get("CODEJUDGE_VISION_JS", "").strip()
-    if env:
-        return Path(env)
-    # 常见本机技能路径（不写入个人用户名硬编码）
-    home = Path.home()
-    candidates = [
-        home / ".codex" / "skills" / "vision" / "scripts" / "vision.js",
-        home / ".agents" / "skills" / "vision" / "scripts" / "vision.js",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[0]
-
-
-VISION_JS = _resolve_vision_js()
 MAX_WORKERS = 3
-RETRY = 2
+_API_KEY: str | None = None
+
+
+def set_api_key(key: str | None) -> None:
+    global _API_KEY
+    _API_KEY = (key or "").strip() or None
 
 RUBRIC_PROMPT = """你是高校《Java程序设计》老师，正在批改期中实操卷。请严格只根据图片内容评分。
 
@@ -86,33 +68,14 @@ def call_vision(image_paths: list[Path]) -> str:
     for img in image_paths:
         prompt = RUBRIC_PROMPT
         if len(image_paths) > 1:
-            prompt += f"\n这是该生提交的第 {image_paths.index(img)+1}/{len(image_paths)} 张图。请先完整观察本图。"
-        cmd = ["node", str(VISION_JS), str(img), prompt]
-        last_err = None
-        for attempt in range(RETRY + 1):
-            try:
-                proc = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=180,
-                )
-                if proc.returncode != 0:
-                    raise RuntimeError(proc.stderr or proc.stdout or "vision failed")
-                parts.append(strip_vision_noise(proc.stdout.strip()))
-                last_err = None
-                break
-            except Exception as e:
-                last_err = e
-                time.sleep(2 * (attempt + 1))
-        if last_err:
-            raise last_err
+            prompt += (
+                f"\n这是该生提交的第 {image_paths.index(img)+1}/{len(image_paths)} 张图。"
+                "请先完整观察本图。"
+            )
+        text = vision_call(img, prompt, api_key=_API_KEY)
+        parts.append(strip_vision_noise(text.strip()))
     if len(parts) == 1:
         return parts[0]
-    # 多图：再让模型根据已有描述汇总一次（用文本，不再传图以省成本）
-    # 简化：本地合并策略——取各次 JSON 中各项最高分，并合并说明
     return json.dumps({"_multi_raw": parts}, ensure_ascii=False)
 
 
@@ -325,15 +288,22 @@ def grade_one(meta_path: Path) -> dict:
     return result
 
 
-def main() -> None:
-    metas = sorted(SUBS.glob("*/meta.json"))
-    print(f"Grading {len(metas)} submissions with {MAX_WORKERS} workers...")
+def main(log: Callable[[str], None] | None = None) -> None:
+    def _log(msg: str) -> None:
+        if log:
+            log(msg)
+        else:
+            print(msg)
+
+    subs = paths.submissions_out()
+    metas = sorted(subs.glob("*/meta.json"))
+    _log(f"开始评分：{len(metas)} 份，并发 {MAX_WORKERS}")
     results = []
     errors = []
 
     def job(mp: Path):
         r = grade_one(mp)
-        print(f"  {r['id']}: {r.get('total', 0)}  review={r.get('needs_review')}")
+        _log(f"  {r['id']}: {r.get('total', 0)}  复核={r.get('needs_review')}")
         return r
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
@@ -344,15 +314,16 @@ def main() -> None:
             except Exception as e:
                 mp = futs[fut]
                 errors.append({"meta": str(mp), "error": str(e)})
-                print(f"  ERROR {mp.parent.name}: {e}")
+                _log(f"  ERROR {mp.parent.name}: {e}")
 
     results.sort(key=lambda x: (x.get("seat") or "ZZZ", x.get("name") or ""))
-    out = GRADES_JSON
+    out = paths.grades_json()
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         json.dumps({"results": results, "errors": errors}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"Saved {out} | ok={len(results)} errors={len(errors)}")
+    _log(f"已保存 {out} | 成功={len(results)} 失败={len(errors)}")
 
 
 if __name__ == "__main__":

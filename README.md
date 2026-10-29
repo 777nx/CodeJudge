@@ -21,16 +21,32 @@
 
 缺截图不整卷归零；能核实的部分照常给分。姓名默认按文件名解析。
 
-## 使用
+## 使用（推荐：绿色 exe）
 
-依赖：Python 3（`openpyxl`、处理旧版 `.doc` 时需 `pywin32`）、Node.js（通义视觉识图脚本）。
+```powershell
+# 在本机打包
+powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
+```
 
-可选环境变量：`CODEJUDGE_VISION_JS`（指向 `vision.js` 绝对路径）。
+将生成的 `dist\CodeJudge\` **整个文件夹**拷到任意 Windows 电脑，双击 `CodeJudge.exe`：
+
+1. 选择答卷目录  
+2. 填写阿里云百炼 API Key  
+3. 开始批改 → 得到 `output\Java期中成绩表.xlsx`
+
+需联网；旧版 `.doc` 建议本机有 Word。无需安装 Python / Node。
+
+## 使用（源码）
+
+依赖：Python 3、`openpyxl`（旧版 `.doc` 可选 `pywin32`）。
 
 ```bash
 pip install openpyxl pywin32
-python tools/extract_submissions.py   # 抽图
-python tools/grade_exam.py            # 识图打分
-python tools/rebuild_grades.py        # 仅重解析已有 vision_raw
-python tools/export_excel.py          # 导出 Excel → output/Java期中成绩表.xlsx
+python main.py                        # 图形界面
+# 或命令行：
+python tools/extract_submissions.py
+python tools/grade_exam.py
+python tools/export_excel.py
 ```
+
+环境变量：`DASHSCOPE_API_KEY`（可选，界面也可填写）。
