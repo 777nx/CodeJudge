@@ -28,11 +28,11 @@
 powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
 ```
 
-将生成的 `dist\CodeJudge\` **整个文件夹**拷到任意 Windows 电脑，双击 `CodeJudge.exe`：
+将生成的 **`dist\CodeJudge.exe` 单个文件**拷到任意 Windows 电脑即可运行（首次启动可能稍慢，属自解压正常现象）：
 
 1. 选择答卷目录  
 2. 填写阿里云百炼 API Key  
-3. 开始批改 → 得到 `output\Java期中成绩表.xlsx`
+3. 开始批改 → 在 exe 同目录得到 `output\Java期中成绩表.xlsx`
 
 需联网；旧版 `.doc` 建议本机有 Word。无需安装 Python / Node。
 

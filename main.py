@@ -15,7 +15,7 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 # 保证 tools 可导入（源码与 PyInstaller 均适用）
 if getattr(sys, "frozen", False):
     BASE = Path(sys.executable).resolve().parent
-    # onedir 时模块在 _internal；onefile 解压到 _MEIPASS
+    # onefile 解压到临时目录 _MEIPASS；工作目录仍用 exe 所在目录
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         sys.path.insert(0, str(meipass))
@@ -33,8 +33,9 @@ from pipeline import load_config, run_pipeline, save_config  # noqa: E402
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
+        # 先隐藏，布局并居中后再显示，避免左上角闪一下
+        self.withdraw()
         self.title("CodeJudge — Java 实操卷批改")
-        self.geometry("720x520")
         self.minsize(640, 460)
 
         paths.set_root(BASE)
@@ -108,7 +109,6 @@ class App(tk.Tk):
         tip = (
             "说明：需联网调用识图 API；.docx 可直接处理；旧版 .doc 需要本机安装 Word。"
             "工作目录为本程序所在文件夹（生成 work/ 与 output/）。"
-            "请勿把含学生信息的目录上传到公开环境。"
         )
         ttk.Label(frm, text=tip, wraplength=680, foreground="#666").grid(
             row=10, column=0, columnspan=2, sticky="w", pady=(8, 0)
@@ -125,6 +125,20 @@ class App(tk.Tk):
                     self.var_dir.set(str(d))
             except Exception:
                 pass
+
+        self._show_centered(720, 520)
+
+    def _show_centered(self, width: int, height: int) -> None:
+        """布局完成后再居中显示，避免窗口先出现在左上角。"""
+        self.update_idletasks()
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        x = max(0, (sw - width) // 2)
+        y = max(0, (sh - height) // 2)
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        self.deiconify()
+        self.lift()
+        self.focus_force()
 
     def browse(self) -> None:
         d = filedialog.askdirectory(title="选择答卷文件夹")

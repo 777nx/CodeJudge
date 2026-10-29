@@ -8,19 +8,20 @@ from pathlib import Path
 CONTENT = """CodeJudge 阅卷台 · 使用说明
 ==========================
 
-1. 双击 CodeJudge.exe
+1. 双击 CodeJudge.exe（单文件绿色版，可单独拷贝）
 2. 选择学生答卷文件夹（含 .docx / 图片）
 3. 填写阿里云百炼 API Key（DashScope）
 4. 点击「开始批改」
-5. 成绩表生成在本目录：
+5. 成绩表生成在 exe 同目录：
    output\\Java期中成绩表.xlsx
 
 注意
 ----
 - 需要联网（调用识图 API）
+- 首次启动可能稍慢（程序自解压），属正常现象
 - 旧版 .doc 建议安装 Microsoft Word；.docx 可直接处理
-- 请复制整个 CodeJudge 文件夹到其他电脑，不要只拷贝 exe
-- API Key 保存在同目录 codejudge_config.json（请勿随成绩公开外传）
+- API Key / work / output 会生成在 exe 同目录
+- 请勿把含学生信息的目录公开外传
 """
 
 

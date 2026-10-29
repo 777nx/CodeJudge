@@ -1,14 +1,21 @@
-# Build CodeJudge Windows app (onedir, portable, slim)
+# Build CodeJudge as a single-file Windows exe (onefile)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 python -m pip install -q -U pip
 python -m pip install -q "pyinstaller>=6.0" openpyxl
 
+# Remove old onedir output if present
+$oldDir = Join-Path $PSScriptRoot "dist\CodeJudge"
+if (Test-Path $oldDir) {
+  Remove-Item -Recurse -Force $oldDir
+}
+
 $pyArgs = @(
   "--noconfirm",
   "--clean",
   "--windowed",
+  "--onefile",
   "--name", "CodeJudge",
   "--paths", "tools",
   "--hidden-import", "openpyxl",
@@ -35,11 +42,15 @@ $pyArgs = @(
 
 python -m PyInstaller @pyArgs
 
-$dist = Join-Path $PSScriptRoot "dist\CodeJudge"
-# Write readme via Python (avoid PowerShell mojibake on Chinese filenames)
-python tools\write_dist_readme.py $dist
+$distDir = Join-Path $PSScriptRoot "dist"
+$exe = Join-Path $distDir "CodeJudge.exe"
+if (-not (Test-Path $exe)) {
+  throw "Build failed: $exe not found"
+}
 
-Write-Host "Build OK: $dist\CodeJudge.exe"
-Get-ChildItem $dist -File | Select-Object Name, Length | Format-Table
-$size = (Get-ChildItem $dist -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
-Write-Host ("Total size: {0:N1} MB" -f $size)
+# README next to the single exe
+python tools\write_dist_readme.py $distDir
+
+Write-Host "Build OK: $exe"
+Get-Item $exe | Select-Object FullName, @{N='MB';E={[math]::Round($_.Length/1MB,1)}}
+Get-ChildItem $distDir -File | Select-Object Name, Length | Format-Table
